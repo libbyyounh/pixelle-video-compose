@@ -1,16 +1,54 @@
+version: '3.8'
+
+# 定义公共模板，避免重复编写
+x-shared-config: &default-config
+  image: ccr.ccs.tencentyun.com/${TENCENT_NAMESPACE}/pixelle-video:latest
+  restart: unless-stopped
+  environment:
+    - TZ=Asia/Shanghai
+  volumes:
+    - ./config.yaml:/app/config.yaml
+    - ./data:/app/data
+    - ./output:/app/output
+  networks:
+    - pixelle-network
+
 services:
-  pixelle-video:
-    image: ccr.ccs.tencentyun.com/prod-nodes/pixelle-video:latest
-    container_name: pixelle-video
-    restart: always
+  # 一次性初始化脚本
+  init:
+    image: alpine:latest
+    volumes:
+      - ./:/workspace
+    command: >
+      sh -c '
+      if [ ! -f /workspace/config.yaml ] && [ -f /workspace/config.example.yaml ]; then
+        cp /workspace/config.example.yaml /workspace/config.yaml;
+      fi
+      '
+    restart: "no"
+
+  # 后端 API 容器
+  api:
+    <<: *default-config  # 继承上面定义的公共配置
+    container_name: pixelle-video-api
+    command: .venv/bin/python api/app.py --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  # 前端 UI 容器
+  web:
+    <<: *default-config  # 同样继承公共配置，硬盘和网络完全复用，零额外开销
+    container_name: pixelle-video-web
+    command: .venv/bin/streamlit run web/app.py --server.port 8501 --server.address 0.0.0.0
     ports:
       - "8501:8501"
-      - "8000:8000"
-    volumes:
-      - ./config.yaml:/app/config.yaml
-      - ./output:/app/output
-      - ./data:/app/data
-      - ./workflows:/app/workflows
-      - ./bgm:/app/bgm
-    environment:
-      - TZ=Asia/Shanghai
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+networks:
+  pixelle-network:
+    driver: bridge
