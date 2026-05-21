@@ -1,0 +1,16 @@
+services:
+  pixelle-video:
+    image: ccr.ccs.tencentyun.com/prod-nodes/pixelle-video:latest
+    container_name: pixelle-video
+    restart: always
+    ports:
+      - "8501:8501"
+      - "8000:8000"
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./output:/app/output
+      - ./data:/app/data
+      - ./workflows:/app/workflows
+      - ./bgm:/app/bgm
+    environment:
+      - TZ=Asia/Shanghai
